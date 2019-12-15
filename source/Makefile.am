@@ -42,37 +42,24 @@
 
 
 #############################################################################
-SUBDIRS 		= doc source include
-
-
-#############################################################################
-ACLOCAL_AMFLAGS		= -I autoconf
-
-m4datadir		= $(datadir)/aclocal
-
-
-AUX_DIST                =			\
-	$(ac_aux_dir)/config.guess		\
-	$(ac_aux_dir)/config.sub		\
-	$(ac_aux_dir)/install-sh		\
-	$(ac_aux_dir)/ltmain.sh			\
-	$(ac_aux_dir)/missing			\
-	$(ac_aux_dir)/depcomp
-
-
-MAINTAINERCLEANFILES 	=			\
-	autoconf/texinfo.tex			\
-	Makefile.in				\
-	aclocal.m4				\
-	configure				\
-	source/stamp-h.in			\
-	$(AUX_DIST)
-
+SUBDIRS			=
 
 #############################################################################
-dist-hook:
-	(cd $(distdir) && mkdir -p $(ac_aux_dir))
-	for file in $(AUX_DIST); do \
-	  cp $$file $(distdir)/$$file; \
-	done
+MAINTAINERCLEANFILES	= Makefile.in
+
+INCLUDES		= -I$(top_builddir) -I$(top_srcdir)	\
+			  -I$(top_builddir)/include		\
+		          -I$(top_srcdir)/include
+
 #############################################################################
+
+lib_LTLIBRARIES 	= libscoplib.la
+
+
+libscoplib_la_SOURCES 	=			\
+	scop.c					\
+	statement.c				\
+	matrix.c				\
+	vector.c
+
+AM_CFLAGS = -Wall -fomit-frame-pointer -g

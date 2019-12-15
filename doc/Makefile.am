@@ -17,8 +17,8 @@
 # *     ::88a      ###      This is free software; you can redistribute it    *
 # *    ::::888a  8a ##::.   and/or modify it under the terms of the GNU       *
 # *  ::::::::888a88a[]:::   Lesser General Public License as published by     *
-# *::8:::::::::SUNDOGa8a::. the Free Software Foundation, either version 2.1  *
-# *::::::::8::::888:Y8888::                of the License, or (at your option)*
+# *::8:::::::::SUNDOGa8a::. the Free Software Foundation, either version 3 of *
+# *::::::::8::::888:Y8888::                the License, or (at your option)   *
 # *::::':::88::::888::Y88a::::::::::::...  any later version.                 *
 # *::'::..    .   .....   ..   ...  .                                         *
 # * This software is distributed in the hope that it will be useful, but      *
@@ -42,37 +42,51 @@
 
 
 #############################################################################
-SUBDIRS 		= doc source include
-
-
-#############################################################################
-ACLOCAL_AMFLAGS		= -I autoconf
-
-m4datadir		= $(datadir)/aclocal
-
-
-AUX_DIST                =			\
-	$(ac_aux_dir)/config.guess		\
-	$(ac_aux_dir)/config.sub		\
-	$(ac_aux_dir)/install-sh		\
-	$(ac_aux_dir)/ltmain.sh			\
-	$(ac_aux_dir)/missing			\
-	$(ac_aux_dir)/depcomp
-
-
-MAINTAINERCLEANFILES 	=			\
-	autoconf/texinfo.tex			\
-	Makefile.in				\
-	aclocal.m4				\
-	configure				\
-	source/stamp-h.in			\
-	$(AUX_DIST)
-
+SUBDIRS 		=
 
 #############################################################################
-dist-hook:
-	(cd $(distdir) && mkdir -p $(ac_aux_dir))
-	for file in $(AUX_DIST); do \
-	  cp $$file $(distdir)/$$file; \
-	done
-#############################################################################
+
+MAINTAINERCLEANFILES	= Makefile.in
+
+EXTRA_DIST		=			\
+	htmldoc.tar.gz				\
+	clan.pdf				\
+	S4.cloog				\
+	ascii-art.txt				\
+	images/basic.eps			\
+	images/basic.fig			\
+	images/basic.jpg			\
+	images/basic.pdf			\
+	images/basic.txt			\
+	images/basic1.eps			\
+	images/basic1.fig			\
+	images/basic1.jpg			\
+	images/basic1.pdf			\
+	images/basic1.txt			\
+	images/basic2.eps			\
+	images/basic2.fig			\
+	images/basic2.jpg			\
+	images/basic2.pdf			\
+	images/basic2.txt			\
+	images/tree.eps				\
+	images/tree.fig				\
+	images/tree.jpg				\
+	images/tree.pdf				\
+	images/tree.txt
+
+
+info_TEXINFOS		= clan.texi
+
+DOCDIR			= htmldoc
+DOXYFILE		= Doxyfile
+DOXYGEN			= @DOXYGEN@
+
+# The following requires a fixed version of the Emacs 19.30 etags.
+ETAGS_ARGS		= --lang=none \
+ --regex='/^@node[ \t]+\([^,]+\)/\1/' $(srcdir)/doc/clan.texi
+TAGS_DEPENDENCIES	= clan.texi $(DOXYFILE).in
+
+htmldoc.tar.gz:
+	mkdir -p $(top_srcdir)/doc/htmldoc
+	$(DOXYGEN) $(DOXYFILE)
+	tar czf htmldoc.tar.gz htmldoc

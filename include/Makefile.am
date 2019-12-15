@@ -40,39 +40,17 @@
 # configure shellscript to generate the Makefile thanks to this file.
 
 
+#############################################################################
+SUBDIRS			=
 
 #############################################################################
-SUBDIRS 		= doc source include
-
-
-#############################################################################
-ACLOCAL_AMFLAGS		= -I autoconf
-
-m4datadir		= $(datadir)/aclocal
-
-
-AUX_DIST                =			\
-	$(ac_aux_dir)/config.guess		\
-	$(ac_aux_dir)/config.sub		\
-	$(ac_aux_dir)/install-sh		\
-	$(ac_aux_dir)/ltmain.sh			\
-	$(ac_aux_dir)/missing			\
-	$(ac_aux_dir)/depcomp
-
-
-MAINTAINERCLEANFILES 	=			\
-	autoconf/texinfo.tex			\
-	Makefile.in				\
-	aclocal.m4				\
-	configure				\
-	source/stamp-h.in			\
-	$(AUX_DIST)
-
+MAINTAINERCLEANFILES	= Makefile.in
 
 #############################################################################
-dist-hook:
-	(cd $(distdir) && mkdir -p $(ac_aux_dir))
-	for file in $(AUX_DIST); do \
-	  cp $$file $(distdir)/$$file; \
-	done
-#############################################################################
+
+pkginclude_HEADERS 	=			\
+	scoplib/statement.h			\
+	scoplib/vector.h			\
+	scoplib/matrix.h			\
+	scoplib/macros.h			\
+	scoplib/scop.h

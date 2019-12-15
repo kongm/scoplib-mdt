@@ -277,16 +277,6 @@ scoplib_scop_print_dot_scop(FILE * file, scoplib_scop_p scop)
 }
 
 /**
- * Same as above, but also dump the tag arrays
- *
- */
-void
-scoplib_scop_print_dot_scop_arraystag (FILE * file, scoplib_scop_p scop)
-{
-  scoplib_scop_print_dot_scop_(file, scop, 0, SCOPLIB_SCOP_PRINT_ARRAYSTAG);
-}
-
-/**
  * scoplib_scop_print_dot_scop_castle function:
  * This function prints the content of a scoplib_scop_t structure (*scop)
  * into a file (file, possibly stdout) for the .scop format, with the castle.
@@ -1040,4 +1030,341 @@ scoplib_scop_normalize_schedule(scoplib_scop_p scop)
 			   beta[i][j]);
 	  }
       }
+}
+
+
+/**
+ * scoplib_scop_insert_parameters:
+ *
+ * This function replace all numerical constants in iteration domains
+ * by newly introduced parameters.
+ *
+ * \param scop                 The scop being parameterized (in-place)
+ * \param nb_new_parameters    The number of parameters to add
+ * \param new_parameter_names  The name of the new parameters.
+ * \output scop                The parameterized scop (from a deep copy)
+ **
+ */
+void
+scoplib_scop_insert_parameters(scoplib_scop_p scop,
+			       const int nb_new_parameters,
+			       char** new_parameter_names)
+{
+  if (! scop)
+    return;
+
+  // Break heavily if not correctly used. As we cannot update the
+  // optionstag, we may break consistency by changing domain
+  // dimensions.
+  if (scop->optiontags)
+    {
+      fprintf (stderr, "[ScopLib][ERROR] scop.c:scoplib_scop_parameterize_constants_in_domains: cannot be called if 'scop->optiontags' is set.");
+      exit (1);
+    }
+
+  int num_params = nb_new_parameters;
+  scoplib_statement_p stm;
+  int i, j;
+
+  // Insert parameters everywhere.
+  for (stm = scop->statement; stm; stm = stm->next)
+    {
+      // Iteration domain.
+      if (stm->domain && stm->domain->elt)
+	{
+	  scoplib_matrix_p d = stm->domain->elt;
+	  scoplib_matrix_p newd =
+	    scoplib_matrix_malloc (d->NbRows, d->NbColumns + num_params);
+	  for (i = 0; i < d->NbRows; ++i)
+	    {
+	      for (j = 0; j < d->NbColumns - 1; ++j)
+		SCOPVAL_assign(newd->p[i][j], d->p[i][j]);
+	      SCOPVAL_assign(newd->p[i][newd->NbColumns - 1], d->p[i][j]);
+	    }
+	  scoplib_matrix_free (d);
+	  stm->domain->elt = newd;
+	}
+      // Access functions.
+      if (stm->read)
+	{
+	  scoplib_matrix_p newread =
+	    scoplib_matrix_malloc (stm->read->NbRows,
+				   stm->read->NbColumns + num_params);
+	  for (i = 0; i < stm->read->NbRows; ++i)
+	    {
+	      for (j = 0; j < stm->read->NbColumns - 1; ++j)
+		SCOPVAL_assign(newread->p[i][j], stm->read->p[i][j]);
+	      SCOPVAL_assign(newread->p[i][newread->NbColumns - 1],
+			     stm->read->p[i][j]);
+	    }
+	  scoplib_matrix_free (stm->read);
+	  stm->read = newread;
+	}
+      if (stm->write)
+	{
+	  scoplib_matrix_p newwrite =
+	    scoplib_matrix_malloc (stm->write->NbRows,
+				   stm->write->NbColumns + num_params);
+	  for (i = 0; i < stm->write->NbRows; ++i)
+	    {
+	      for (j = 0; j < stm->write->NbColumns - 1; ++j)
+		SCOPVAL_assign(newwrite->p[i][j], stm->write->p[i][j]);
+	      SCOPVAL_assign(newwrite->p[i][newwrite->NbColumns - 1],
+			     stm->write->p[i][j]);
+	    }
+	  scoplib_matrix_free (stm->write);
+	  stm->write = newwrite;
+	}
+      // Schedule.
+      if (stm->schedule)
+	{
+	  scoplib_matrix_p newsched = scoplib_matrix_malloc
+	    (stm->schedule->NbRows, stm->schedule->NbColumns + num_params);
+	  for (i = 0; i < stm->schedule->NbRows; ++i)
+	    {
+	      for (j = 0; j < stm->schedule->NbColumns - 1; ++j)
+		SCOPVAL_assign(newsched->p[i][j], stm->schedule->p[i][j]);
+	      SCOPVAL_assign(newsched->p[i][newsched->NbColumns - 1],
+			     stm->schedule->p[i][j]);
+	    }
+	  scoplib_matrix_free (stm->schedule);
+	  stm->schedule = newsched;
+	}
+    }
+
+  // 2.b: in the scop.
+  if (scop->context)
+    {
+      scoplib_matrix_p old_context = scop->context;
+      scop->context = scoplib_matrix_malloc
+	(old_context->NbRows, old_context->NbColumns + num_params);
+      for (i = 0; i < old_context->NbRows; ++i)
+	{
+	  for (j = 0; j < old_context->NbColumns - 1; ++j)
+	    SCOPVAL_assign(scop->context->p[i][j], old_context->p[i][j]);
+	  SCOPVAL_assign(scop->context->p[i][scop->context->NbColumns - 1],
+			 old_context->p[i][j]);
+	}
+      scoplib_matrix_free (old_context);
+    }
+  else
+    scop->context = scoplib_matrix_malloc (0, num_params + 2);
+
+  int old_nb_params = scop->nb_parameters;
+  scop->nb_parameters += num_params;
+  scop->parameters = (char**) realloc(scop->parameters, sizeof(char*) * (scop->nb_parameters + 1));
+  if (new_parameter_names)
+    for (i = 0; i < num_params; ++i)
+      scop->parameters[old_nb_params + i] = new_parameter_names[i];
+  else
+    for (i = 0; i < num_params; ++i)
+      {
+	char buffer[64];
+	sprintf (buffer, "___scoplib__N%d", i);
+	scop->parameters[old_nb_params + i] = strdup (buffer);
+      }
+}
+
+
+/**
+ * scoplib_scop_parameterize_constants_in_domains:
+ *
+ * This function replace all numerical constants in iteration domains
+ * by newly introduced parameters.
+ *
+ * \param scop             The scop being parameterized
+ * \param parameter_slack  The slack for new parameter Ni, e.g.,
+ *                         Ni - slack <= scalar value <= Ni + slack
+ * \output scop            The parameterized scop (from a deep copy)
+ **
+ */
+scoplib_scop_p
+scoplib_scop_parameterize_constants_in_domains(const scoplib_scop_p scop_input,
+					       const int parameter_slack)
+{
+  if (! scop_input)
+    return NULL;
+
+  // Break heavily if not correctly used. As we cannot update the
+  // optionstag, we may break consistency by changing domain
+  // dimensions.
+  if (scop_input->optiontags)
+    {
+      fprintf (stderr, "[ScopLib][ERROR] scop.c:scoplib_scop_parameterize_constants_in_domains: cannot be called if 'scop->optiontags' is set.");
+      exit (1);
+    }
+
+  scoplib_scop_p scop = scoplib_scop_dup (scop_input);
+
+  // 1. Compute the number of parameters needed.
+  int i, j;
+  int num_stmt = scoplib_statement_number (scop->statement);
+  int max_param_count = 16 * num_stmt;
+  int scalar_offset = parameter_slack;
+  int parameters[max_param_count];
+  int pos = 0;
+  scoplib_statement_p stm;
+  for (stm = scop->statement; stm; stm = stm->next)
+    {
+      scoplib_matrix_p d = stm->domain->elt;
+      for (i = 0; i < d->NbRows; ++i)
+	{
+	  int val = SCOPVAL_get_si(d->p[i][d->NbColumns - 1]);
+	  int absval = val < 0 ? -val : val;
+	  if (scalar_offset >= absval)
+	    continue;
+	  for (j = 0; j < pos; ++j)
+	    if (parameters[j] - scalar_offset <= absval &&
+		absval <= parameters[j] + scalar_offset)
+	      break;
+	  if (j == pos)
+	    {
+	      // Store the absolute value only.
+	      parameters[pos++] = absval;
+	      if (pos > max_param_count)
+		{
+		  fprintf (stderr, "[ScopLib][ERROR] scop.c:parameterize_scop: too few entries in the array to store scalar values for parameterization\n");
+		  exit (1);
+		}
+	    }
+	}
+    }
+
+
+  // No parameter needs to be added, early exit.
+  if (pos == 0)
+    return scop;
+
+  // 2. Parameterize the scop with 'num_params' new parameters.
+  int num_params = pos;
+  char* new_parameter_names[num_params];
+  for (i = 0; i < num_params; ++i)
+    {
+      char buffer[64];
+      sprintf (buffer, "___scoplib__N%d", i);
+      new_parameter_names[i] = strdup (buffer);
+    }
+  scoplib_scop_insert_parameters(scop, num_params, new_parameter_names);
+
+  // 3. Update iteration domains accordingly.
+  for (stm = scop->statement; stm; stm = stm->next)
+    {
+      // Iteration domain.
+      if (stm->domain && stm->domain->elt)
+	{
+	  scoplib_matrix_p d = stm->domain->elt;
+	  scoplib_matrix_p newd =
+	    scoplib_matrix_malloc (d->NbRows, d->NbColumns);
+	  int offset = stm->nb_iterators + 1;
+	  for (i = 0; i < d->NbRows; ++i)
+	    {
+	      for (j = 0; j < d->NbColumns - 1; ++j)
+		SCOPVAL_set_si(newd->p[i][j], SCOPVAL_get_si(d->p[i][j]));
+	      int val = SCOPVAL_get_si(d->p[i][j]);
+	      int absval = val < 0 ? -val : val;
+	      if (val >= -scalar_offset && val <= scalar_offset)
+		{
+		  SCOPVAL_set_si(newd->p[i][newd->NbColumns - 1], val);
+		  continue;
+		}
+	      for (j = 0; j < num_params; ++j)
+		if (parameters[j] - scalar_offset <= absval &&
+		    absval <= parameters[j] + scalar_offset)
+		  break;
+	      if (val < 0)
+		{
+		  SCOPVAL_set_si(newd->p[i][offset + j], -1);
+		  SCOPVAL_set_si(newd->p[i][newd->NbColumns - 1],
+				 val + parameters[j]);
+		}
+	      else
+		{
+		  SCOPVAL_set_si(newd->p[i][offset + j], 1);
+		  SCOPVAL_set_si(newd->p[i][newd->NbColumns - 1],
+				 val - parameters[j]);
+		}
+	    }
+	  scoplib_matrix_free (d);
+	  stm->domain->elt = newd;
+	}
+    }
+
+  // 4. Update context.
+  int row_offset = 0;
+  if (scop->context)
+    {
+      scoplib_matrix_p old_context = scop->context;
+      scop->context = scoplib_matrix_malloc
+	(old_context->NbRows + num_params, old_context->NbColumns);
+      scoplib_matrix_replace_matrix(scop->context, old_context, 0);
+      row_offset = old_context->NbRows;
+      scoplib_matrix_free (old_context);
+    }
+  else
+    scop->context = scoplib_matrix_malloc (num_params, num_params + 2);
+
+  for (i = 0; i < num_params; ++i)
+    {
+      SCOPVAL_set_si(scop->context->p[i + row_offset][0], 0);
+      SCOPVAL_set_si(scop->context->p[i + row_offset][i + row_offset + 1], 1);
+      SCOPVAL_set_si(scop->context->p[i][scop->context->NbColumns - 1],
+		     -parameters[i]);
+    }
+
+  return scop;
+}
+
+
+/**
+ * scoplib_scop_insert_negative_params:
+ *
+ * This function introduce one new parameter mNi for each parameter
+ * Ni, such that mNi = -Ni.
+ *
+ * \param scop             The scop being parameterized
+ * \output scop            The parameterized scop (from a deep copy)
+ **
+ */
+scoplib_scop_p
+scoplib_scop_insert_negative_params(const scoplib_scop_p scop_input)
+{
+  if (! scop_input)
+    return NULL;
+
+  int i;
+  scoplib_scop_p scop = scoplib_scop_dup (scop_input);
+  int num_params = scop->nb_parameters;
+
+  // 1. Parameterize the scop with 'num_params' new parameters.
+  char* new_parameter_names[num_params];
+  for (i = 0; i < num_params; ++i)
+    {
+      char buffer[64];
+      sprintf (buffer, "___scoplib__mN%d", i);
+      new_parameter_names[i] = strdup (buffer);
+    }
+  scoplib_scop_insert_parameters(scop, num_params, new_parameter_names);
+
+  // 2. Update the context.
+  int row_offset = 0;
+  if (scop->context)
+    {
+      scoplib_matrix_p old_context = scop->context;
+      scop->context = scoplib_matrix_malloc
+	(old_context->NbRows + num_params, old_context->NbColumns);
+      scoplib_matrix_replace_matrix(scop->context, old_context, 0);
+      row_offset = old_context->NbRows;
+      scoplib_matrix_free (old_context);
+    }
+  else
+    scop->context = scoplib_matrix_malloc (num_params, num_params + 2);
+
+  for (i = 0; i < num_params; ++i)
+    {
+      SCOPVAL_set_si(scop->context->p[i + row_offset][0], 0);
+      SCOPVAL_set_si(scop->context->p[i + row_offset][i + 1], 1);
+      SCOPVAL_set_si(scop->context->p[i + row_offset][i + num_params + 1], 1);
+    }
+
+  return scop;
 }

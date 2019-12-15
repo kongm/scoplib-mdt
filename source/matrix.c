@@ -607,12 +607,12 @@ scoplib_matrix_read_arrays(FILE* foo, char*** arrays, int* nb_arr)
       do
 	{
 	  c = fgets(s, SCOPLIB_MAX_STRING, foo);
-	  while ((c != NULL) && isspace(*c) && (*c != '\n'))
+	  while ((c != NULL) && *c && isspace(*c) && (*c != '\n'))
 	    c++;
 	}
-      while (c != NULL && (*c == '#' || *c == '\n'));
+      while (c != NULL && *c && (*c == '#' || *c == '\n'));
 
-      if (c == NULL)
+      if (c == NULL || *c == '\0')
 	{
 	  fprintf(stderr, "[Scoplib] Error: not enough rows\n");
 	  exit(1);
@@ -642,9 +642,9 @@ scoplib_matrix_read_arrays(FILE* foo, char*** arrays, int* nb_arr)
       /* Read the array, passed as a comment at the end of the line. */
       if (c)
 	{
-	  while (c && (isspace(*c) || *c == '#'))
+	  while (c && *c && (isspace(*c) || *c == '#'))
 	    ++c;
-	  for (count = 0; c && *c != '[' && *c != '\n'; ++count)
+	  for (count = 0; c && *c && *c != '[' && *c != '\n'; ++count)
 	    buff[count] = *(c++);
 	  buff[count] = '\0';
 	  if (count && SCOPVAL_get_si(matrix->p[i][0]))
